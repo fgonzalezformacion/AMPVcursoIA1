@@ -61,14 +61,18 @@ p { line-height: 1.55; }
 .metric strong { white-space: nowrap; }
 .field, .fields { display: grid; gap: .45rem; }
 .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.room-measures { grid-template-columns: repeat(auto-fit, minmax(min(5.5rem, 100%), 1fr)); }
 label, .label { font-size: .875rem; font-weight: 700; }
 input:not([type=file]), select { width: 100%; min-width: 0; min-height: 44px; color: var(--navy); border: 1px solid #a7b6ca; border-radius: 9px; background: var(--surface); padding: .62rem .7rem; }
 input[type=radio] { position: absolute; opacity: 0; width: 1px; min-height: 0; }
 .mode { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.mode label:nth-child(3) { grid-column: 1 / -1; border-top: 1px solid var(--line); }
 .mode label { position: relative; display: grid; place-items: center; text-align: center; min-height: 44px; padding: .4rem; cursor: pointer; }
 .mode label:has(input:checked) { background: var(--blue); color: white; }
 .mode label:focus-within { outline: 3px solid #6093f3; outline-offset: -3px; }
 .opening { padding: .8rem; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: .6rem; background: #f8faff; }
+.material-details { display: grid; gap: .25rem; background: var(--tint); border-radius: 9px; padding: .65rem .8rem; }
+.material-details a { color: var(--blue-dark); font-weight: 700; width: fit-content; }
 table { width: 100%; border-collapse: collapse; font-size: .93rem; }
 th, td { border-bottom: 1px solid var(--line); padding: .65rem .46rem; text-align: left; }
 th { color: var(--muted); font-size: .875rem; }

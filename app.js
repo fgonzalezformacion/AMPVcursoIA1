@@ -16,6 +16,14 @@
   })[char]);
   const samePaint = value => value.trim().toLocaleLowerCase('es');
   const defaultPaint = 'Pintura principal';
+  const roomSurfaces = [
+    ['walls', 'Cuatro paredes'],
+    ['ceiling', 'Techo'],
+    ['walls-and-ceiling', 'Cuatro paredes y techo'],
+    ['width-wall', 'Una pared del lado ancho'],
+    ['length-wall', 'Una pared del lado largo']
+  ];
+  const materialsById = new Map(paintMaterials.map(material => [material.id, material]));
 
   let users = readUsers();
   let activeId = null;
@@ -90,10 +98,25 @@
     return /^\d+(?:[.,]\d{1,6})?$/.test(text) ? Number(text.replace(',', '.')) : NaN;
   }
 
+  function grossArea({ mode, area, height, width, length, roomSurface }) {
+    if (mode === 'area') return area;
+    if (mode === 'dimensions') return width * height;
+
+    const walls = 2 * (width + length) * height;
+    const ceiling = width * length;
+    switch (roomSurface) {
+      case 'walls': return walls;
+      case 'ceiling': return ceiling;
+      case 'walls-and-ceiling': return walls + ceiling;
+      case 'width-wall': return width * height;
+      case 'length-wall': return length * height;
+      default: return NaN;
+    }
+  }
+
   function paintCalculation(surface) {
-    const gross = surface.mode === 'dimensions' ? surface.width * surface.height : surface.area;
     const openings = surface.openings.reduce((sum, opening) => sum + opening.width * opening.height, 0);
-    const area = gross - openings;
+    const area = grossArea(surface) - openings;
     const effective = surface.coverage * surface.percent / 100;
     return { area, effective, liters: area * surface.coats / effective };
   }
@@ -240,8 +263,25 @@
     </div>`;
   }
 
+  function renderMaterialPicker(selectedId) {
+    const categories = [...new Set(paintMaterials.map(material => material.category))];
+    return `<label class="field"><span>Material</span><select name="material">
+      <option value="">Introducir material manualmente</option>
+      ${categories.map(category => `<optgroup label="${escape(category)}">
+        ${paintMaterials.filter(material => material.category === category).map(material =>
+          `<option value="${escape(material.id)}"${material.id === selectedId ? ' selected' : ''}>${escape(material.name)}</option>`
+        ).join('')}
+      </optgroup>`).join('')}
+    </select></label>
+    <div class="material-details small" data-material-details hidden>
+      <p data-material-coverage></p>
+      <a data-material-sheet target="_blank" rel="noopener noreferrer">Abrir ficha técnica (PDF)</a>
+    </div>`;
+  }
+
   function renderSurfaceForm(work, surface) {
-    const mode = surface?.mode || 'area';
+    const mode = surface?.mode || 'room';
+    const legacyMode = surface?.mode === 'dimensions';
     const paints = [...new Set(work.surfaces.map(item => item.paint))];
     const coverageOptions = ['Ficha técnica', 'Estimación orientativa'];
     return `${buttonBack(work.name, 'work')}
@@ -250,18 +290,27 @@
         <section class="panel stack">
           ${textField('name', 'Nombre', surface?.name, 'required maxlength="100" placeholder="Ej. Pared del salón"')}
           <div class="mode" role="group" aria-label="Modo de medición">
+            <label><input type="radio" name="mode" value="room"${mode === 'room' ? ' checked' : ''}>Alto, ancho y largo</label>
             <label><input type="radio" name="mode" value="area"${mode === 'area' ? ' checked' : ''}>Introducir m²</label>
-            <label><input type="radio" name="mode" value="dimensions"${mode === 'dimensions' ? ' checked' : ''}>Ancho y alto</label>
+            ${legacyMode ? '<label><input type="radio" name="mode" value="dimensions" checked>Medidas guardadas</label>' : ''}
           </div>
           <div class="stack" data-mode="area">${decimalField('area', 'Superficie a pintar (m²)', surface?.area || '')}</div>
-          <div class="stack" data-mode="dimensions">
-            <div class="fields">${decimalField('width', 'Ancho (m)', surface?.width || '')}${decimalField('height', 'Alto o largo (m)', surface?.height || '')}</div>
-            <div class="section-heading"><h2>Huecos</h2>${button('+ Añadir hueco', 'add-opening')}</div>
+          <div class="stack" data-mode="room dimensions">
+            <div class="fields room-measures">
+              ${decimalField('height', 'Alto (m)', surface?.height || '')}
+              ${decimalField('width', 'Ancho (m)', surface?.width || '')}
+              <div data-mode="room">${decimalField('length', 'Largo (m)', surface?.length || '')}</div>
+            </div>
+            <label class="field" data-mode="room"><span>Qué vas a pintar</span><select name="room-surface">
+              ${roomSurfaces.map(([key, label]) => `<option value="${key}"${surface?.roomSurface === key ? ' selected' : ''}>${label}</option>`).join('')}
+            </select></label>
+            <div class="section-heading"><h2>Huecos a descontar</h2>${button('+ Añadir hueco', 'add-opening')}</div>
             <div class="stack" id="openings">${(surface?.openings || []).map(renderOpening).join('')}</div>
           </div>
           <div class="settings stack">
-            <h2>Pintura</h2>
-            ${textField('paint', 'Nombre de la pintura', surface?.paint || paints[0] || defaultPaint, 'required maxlength="100" list="paint-options"')}
+            <h2>Material y rendimiento</h2>
+            ${renderMaterialPicker(surface?.materialId)}
+            ${textField('paint', 'Nombre o referencia del material', surface?.paint || paints[0] || defaultPaint, 'required maxlength="100" list="paint-options"')}
             <datalist id="paint-options">${paints.map(paint => `<option value="${escape(paint)}"></option>`).join('')}</datalist>
             <div class="fields">
               ${textField('coats', 'Manos', surface?.coats ?? 2, 'required inputmode="numeric" maxlength="3"')}
@@ -298,7 +347,9 @@
     else if (work && screen === 'work') root.innerHTML = renderWork(work);
     else if (work && screen === 'surface') {
       root.innerHTML = renderSurfaceForm(work, work.surfaces.find(surface => surface.id === editingSurface));
-      refreshSurface(root.querySelector('#surface-form'));
+      const form = root.querySelector('#surface-form');
+      refreshMaterial(form);
+      refreshSurface(form);
     } else root.innerHTML = renderWorks(user);
   }
 
@@ -309,11 +360,14 @@
       id: form.dataset.id || id(),
       name: data.get('name').trim(),
       paint: data.get('paint').trim(),
+      materialId: data.get('material') || null,
       mode,
       area: mode === 'area' ? decimal(data.get('area')) : 0,
-      width: mode === 'dimensions' ? decimal(data.get('width')) : 0,
-      height: mode === 'dimensions' ? decimal(data.get('height')) : 0,
-      openings: mode === 'dimensions' ? [...form.querySelectorAll('[data-opening]')].map(opening => ({
+      width: mode !== 'area' ? decimal(data.get('width')) : 0,
+      height: mode !== 'area' ? decimal(data.get('height')) : 0,
+      length: mode === 'room' ? decimal(data.get('length')) : 0,
+      roomSurface: mode === 'room' ? data.get('room-surface') : null,
+      openings: mode !== 'area' ? [...form.querySelectorAll('[data-opening]')].map(opening => ({
         type: opening.querySelector('[name="opening-type"]').value,
         width: decimal(opening.querySelector('[name="opening-width"]').value),
         height: decimal(opening.querySelector('[name="opening-height"]').value)
@@ -330,9 +384,11 @@
   }
 
   function validArea(s) {
-    const hasDimensions = s.mode === 'dimensions' && positive(s.width) && positive(s.height);
+    const hasDimensions = positive(s.width) && positive(s.height);
+    const hasRoom = s.mode === 'room' && hasDimensions && positive(s.length);
+    const hasRectangle = s.mode === 'dimensions' && hasDimensions;
     const hasArea = s.mode === 'area' && positive(s.area) && s.openings.length === 0;
-    return (hasDimensions || hasArea)
+    return (hasRoom || hasRectangle || hasArea)
       && s.openings.every(o => positive(o.width) && positive(o.height))
       && positive(paintCalculation(s).area, 1000000000);
   }
@@ -349,10 +405,28 @@
     return positive(liters, 1000000000);
   }
 
+  function refreshMaterial(form, applyDefaults = false) {
+    const material = materialsById.get(form.elements.material.value);
+    const details = form.querySelector('[data-material-details]');
+    details.hidden = !material;
+    if (!material) return;
+
+    const range = material.min === material.max ? format(material.min) : `${format(material.min)}–${format(material.max)}`;
+    const condition = material.condition ? ` (${material.condition})` : '';
+    details.querySelector('[data-material-coverage]').textContent = `Rendimiento de ficha · ${range} m²/L${condition}`;
+    details.querySelector('[data-material-sheet]').href = material.sheet;
+
+    if (applyDefaults) {
+      form.elements.paint.value = material.name;
+      form.elements.coverage.value = String(material.min).replace('.', ',');
+      form.elements.source.value = 'Ficha técnica';
+    }
+  }
+
   function refreshSurface(form) {
     const mode = form.querySelector('[name="mode"]:checked').value;
     for (const section of form.querySelectorAll('[data-mode]')) {
-      section.hidden = section.dataset.mode !== mode;
+      section.hidden = !section.dataset.mode.split(' ').includes(mode);
       for (const input of section.querySelectorAll('input, select')) input.disabled = section.hidden;
     }
     const surface = readSurface(form);
@@ -413,7 +487,8 @@
     return data?.version === 1 && isId(user?.id) && isName(user.name, 60) && Array.isArray(user.works)
       && user.works.every(work => isId(work?.id) && isName(work.name, 100) && isDate(work.updatedAt)
         && Array.isArray(work.surfaces) && work.surfaces.every(s => isId(s?.id) && isName(s.name, 100)
-          && isName(s.paint, 100) && ['Ficha técnica', 'Estimación orientativa'].includes(s.source)
+          && isName(s.paint, 100) && (s.materialId == null || isName(s.materialId, 60))
+          && ['Ficha técnica', 'Estimación orientativa'].includes(s.source)
           && Array.isArray(s.openings) && s.openings.every(o => o && ['Puerta', 'Ventana', 'Otro hueco'].includes(o.type))
           && validArea(s) && validCoverage(s) && validCoats(s) && validLiters(paintCalculation(s).liters))
         && Array.isArray(work.sizes) && work.sizes.every(setting => isName(setting?.key, 200)
@@ -525,6 +600,7 @@
   root.addEventListener('input', event => {
     const form = event.target.closest('#surface-form');
     if (!form) return;
+    if (event.target.name === 'material') refreshMaterial(form, true);
     if (event.target.name === 'source' && event.target.value === 'Estimación orientativa' && !form.elements.coverage.value) {
       form.elements.coverage.value = '10';
     }
@@ -556,7 +632,10 @@
       }
     } else if (form.id === 'surface-form' && work) {
       const surface = readSurface(form);
-      if (!isName(surface.name, 100) || !isName(surface.paint, 100)) return showError(form, 'Escribe el nombre de la superficie y el de la pintura.');
+      if (!isName(surface.name, 100) || !isName(surface.paint, 100)) return showError(form, 'Escribe el nombre de la superficie y el del material.');
+      if (surface.mode === 'room' && ![surface.height, surface.width, surface.length].every(value => positive(value))) {
+        return showError(form, 'Introduce un alto, un ancho y un largo mayores que cero.');
+      }
       if (!validArea(surface)) return showError(form, 'Revisa las medidas. Los huecos deben dejar una superficie a pintar mayor que cero.');
       if (!validCoats(surface)) return showError(form, 'Indica un número entero de manos mayor que cero.');
       if (!validCoverage(surface)) return showError(form, 'Indica un rendimiento positivo y un porcentaje mayor que 0 y de hasta 100 %.');
