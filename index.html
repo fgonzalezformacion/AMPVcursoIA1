@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f6fb">
+  <meta name="description" content="Calcula litros y botes de pintura y guarda las mediciones de tus obras.">
+  <title>Asistente de Obras de Pintura</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="frame top-inner">
+      <button type="button" class="brand" data-action="home">
+        <span class="roller" aria-hidden="true"></span>
+        <span>Asistente de Obras <span class="brand-end">de Pintura</span></span>
+      </button>
+      <button type="button" id="profile-button" class="button ghost" data-action="profiles" hidden></button>
+    </div>
+  </header>
+  <main class="frame" id="app" tabindex="-1"></main>
+  <div id="status" class="toast" role="status" hidden></div>
+  <input type="file" id="backup-file" accept=".json,application/json" hidden>
+  <noscript><p class="frame">Activa JavaScript en el navegador para utilizar el asistente.</p></noscript>
+</body>
+</html>
